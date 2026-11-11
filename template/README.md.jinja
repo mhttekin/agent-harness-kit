@@ -58,6 +58,8 @@ No agents are required for check.sh or offline tests.
 - Record rejected/not-adopted approaches with evidence, limits and revisit criteria.
   Read ADRs before retrying; tiny eval sets don't justify broad conclusions. Keep
   labels owner-controlled and compare metric values, not just a scorer's exit code.
+- Chain multi-step shell commands with `&&` or `set -e`; a failed step must stop the
+  sequence. Never continue past a failed branch switch, install or render.
 
 The dotenv/strict-xfail examples illustrate patterns, not adopted product rules.
 The label hook is a local guard; branch protection and owner review enforce policy.
