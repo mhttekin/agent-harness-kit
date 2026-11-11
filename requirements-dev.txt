@@ -1,0 +1,7 @@
+copier>=9,<10
+pre-commit>=4
+ruff>=0.9
+pytest>=8
+pytest-socket>=0.7
+python-dotenv>=1
+jsonschema>=4

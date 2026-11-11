@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./**/.env*)",
+      "Edit(./evals/labels/**)",
+      "Write(./evals/labels/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/agent-hooks/post-edit.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

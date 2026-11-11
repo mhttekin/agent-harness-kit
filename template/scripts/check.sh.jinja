@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+if [[ -x .venv/bin/python ]]; then
+  export PATH="$PWD/.venv/bin:$PATH"
+else
+  echo "Create .venv and install the development dependencies first." >&2
+  exit 1
+fi
+{% if language == 'python' %}
+(
+{{ lint_command }}
+)
+(
+{{ test_command }}
+)
+{% endif %}

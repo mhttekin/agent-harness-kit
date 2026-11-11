@@ -1,0 +1,12 @@
+"""Explicit dotenv opt-out; tests set it before importing application code."""
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+def load_config(dotenv_path: Path | None = None) -> dict:
+    if os.environ.get("HARNESS_NO_DOTENV") != "1":
+        load_dotenv(dotenv_path=dotenv_path)
+    return {"example": os.environ.get("EXAMPLE_SETTING", "")}

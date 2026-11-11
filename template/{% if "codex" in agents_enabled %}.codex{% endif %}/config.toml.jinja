@@ -1,0 +1,5 @@
+# Validate at end of turn; keep check output out of Stop's JSON stdout channel.
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "bash \"$(git rev-parse --show-toplevel)/scripts/agent-hooks/codex-stop.sh\""

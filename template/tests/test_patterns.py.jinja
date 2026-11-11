@@ -1,0 +1,52 @@
+"""Examples: replace sample contracts with invariants from your own project."""
+
+import json
+import socket
+from pathlib import Path
+
+import pytest
+from pytest_socket import SocketBlockedError
+
+from {{ package_name }} import describe
+from {{ package_name }}.config import load_config
+
+ROOT = Path(__file__).resolve().parents[1]
+# Exceptions only decrease; remove one once its module fits the default.
+MODULE_LIMIT = 400
+LINE_RATCHET = {}  # e.g. {"large_module.py": 520}
+
+
+def test_module_ratchet():
+    package = ROOT / "src" / "{{ package_name }}"
+    assert all((package / path).is_file() for path in LINE_RATCHET)
+    for path in package.rglob("*.py"):
+        relative = path.relative_to(package).as_posix()
+        assert len(path.read_text().splitlines()) <= LINE_RATCHET.get(relative, MODULE_LIMIT)
+
+
+def test_golden_master():
+    # Mock transports and time in a real application; keep domain logic real.
+    expected = json.loads((ROOT / "tests/fixtures/describe.json").read_text())
+    assert [describe(name) for name in [" Ada ", "", "Lin"]] == expected
+
+
+def test_dotenv_isolation(tmp_path, monkeypatch):
+    envfile = tmp_path / ".env"
+    envfile.write_text("EXAMPLE_SETTING=should-not-be-read\n")
+    monkeypatch.delenv("EXAMPLE_SETTING", raising=False)
+    assert load_config(envfile) == {"example": ""}
+
+
+def test_config_is_temporary(tmp_config):
+    assert json.loads(tmp_config.read_text()) == {}
+
+
+def test_network_is_blocked():
+    with pytest.raises(SocketBlockedError):
+        socket.socket()
+
+
+@pytest.mark.xfail(strict=True, reason="Example only: Unicode graphemes need a product decision")
+def test_known_bug_example():
+    # Assert the desired behavior; a fix produces XPASS and requires removing xfail.
+    assert describe("e\u0301")["length"] == 1

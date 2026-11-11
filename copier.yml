@@ -1,0 +1,26 @@
+_preserve_symlinks: true
+_min_copier_version: "9.0.0"
+_subdirectory: template
+_templates_suffix: .jinja
+project_name:
+  type: str
+  default: My Project
+package_name:
+  type: str
+  default: my_project
+  validator: "{% if not (package_name | regex_search('^[a-z][a-z0-9_]*$')) or package_name in ['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'] %}Use a lowercase Python identifier{% endif %}"
+language:
+  type: str
+  choices: [python]
+  default: python
+lint_command:
+  type: str
+  default: python -m ruff format --check . && python -m ruff check .
+test_command:
+  type: str
+  default: python -m pytest -q
+agents_enabled:
+  type: str
+  multiselect: true
+  choices: [claude, codex]
+  default: [claude, codex]

@@ -1,0 +1,25 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: .venv/bin/python -m ruff format --check
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check
+        entry: .venv/bin/python -m ruff check
+        language: system
+        types: [python]
+      - id: protect-labels
+        name: protect eval labels
+        entry: .venv/bin/python scripts/protect_labels.py
+        language: system
+        files: ^evals/labels/
+        pass_filenames: false
+      - id: tests
+        name: project checks
+        entry: ./scripts/check.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

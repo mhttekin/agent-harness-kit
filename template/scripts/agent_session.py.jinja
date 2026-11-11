@@ -1,0 +1,105 @@
+"""Shared interactive/batch launch adapters; Git remains owned by the loop."""
+
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+from contextlib import contextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+ENABLED = {{ agents_enabled | to_json }}
+
+
+@contextmanager
+def agent_environment(agent):
+    env = os.environ.copy()
+    # Application keys should not silently override a CLI subscription login.
+    env.pop("ANTHROPIC_API_KEY", None)
+    if agent == "claude":
+        yield env
+        return
+    auth = Path(env.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
+    with TemporaryDirectory(prefix="harness-agent-") as directory:
+        scoped = Path(directory)
+        scoped.chmod(0o700)
+        env["CODEX_HOME"] = directory
+        if auth.is_file():
+            shutil.copyfile(auth, scoped / "auth.json")
+            (scoped / "auth.json").chmod(0o600)
+        yield env
+
+
+def command(agent, args, prompt=None):
+    if agent not in ENABLED:
+        raise ValueError(f"Agent is not enabled: {agent}")
+    if agent == "codex":
+        common = [
+            "--sandbox",
+            "workspace-write",
+            "-c",
+            "sandbox_workspace_write.network_access=false",
+        ]
+        return (
+            [agent, "-a", "never", "exec", *common, "--json", prompt]
+            if prompt is not None
+            else [agent, *common, *args]
+        )
+    gitdir = subprocess.check_output(["git", "rev-parse", "--absolute-git-dir"], text=True).strip()
+    settings = {
+        "autoMemoryEnabled": False,
+        "sandbox": {
+            "enabled": True,
+            "failIfUnavailable": True,
+            "allowUnsandboxedCommands": False,
+            "filesystem": {"denyWrite": [gitdir]},
+            "network": {"allowedDomains": []},
+        },
+    }
+    common = [
+        "--setting-sources",
+        "project",
+        "--settings",
+        json.dumps(settings),
+        "--strict-mcp-config",
+        "--mcp-config",
+        '{"mcpServers":{}}',
+    ]
+    return (
+        [
+            agent,
+            "-p",
+            prompt,
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--permission-mode",
+            "dontAsk",
+            *common,
+        ]
+        if prompt is not None
+        else [agent, *common, *args]
+    )
+
+
+def wait(command_args, env, timeout=None, **kwargs):
+    with subprocess.Popen(command_args, env=env, start_new_session=True, **kwargs) as process:
+        try:
+            return process.wait(timeout=timeout)
+        except (subprocess.TimeoutExpired, KeyboardInterrupt):
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+            raise
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ENABLED:
+        sys.exit(f"usage: scripts/agent.sh {'|'.join(ENABLED)} [args...]")
+    with agent_environment(sys.argv[1]) as env:
+        return wait(command(sys.argv[1], sys.argv[2:]), env)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

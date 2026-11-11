@@ -1,0 +1,57 @@
+# {{ project_name }}
+
+Python agent harness scaffold. Replace the sample package and tests with local contracts.
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+git init
+.venv/bin/pre-commit install
+.venv/bin/pre-commit install --hook-type pre-push
+./scripts/check.sh
+```
+
+Bootstrap using `.agents/skills/harness-bootstrap/SKILL.md`. Claude users can invoke
+`/harness-bootstrap`; the skill files in `.claude/skills` share the canonical copies.
+Adopt in order: AGENTS.md → gates → hooks → invariant tests → golden → evals →
+reviewer → plans/loop. Add each layer only when its predecessor provides value.
+
+Use `scripts/agent.sh <enabled-agent>` for interactive work. Hooks load at session
+startup: restart after changing them. The bootstrap must configure review rules
+before the loop can complete work. Copy docs/plans/template to a named plan, fill
+its queue (schema next to it), then try:
+
+```sh
+scripts/run_units.sh --agent {{ agents_enabled[0] if agents_enabled else 'codex' }} --plan docs/plans/template --dry-run
+```
+
+The loop works on a clean committed checkout, locks the Git common directory,
+runs one fresh child per unit, checks scope, labels and goldens, runs gates and a
+fresh reviewer, then stages explicit paths and commits locally. It never pushes.
+Failures preserve work for inspection. The model prompt is not a security boundary;
+Codex workspace sandbox does not guarantee Git denial on every CLI version.
+Run in a disposable checkout and inspect CLI sandbox support before unattended use.
+No agents are required for check.sh or offline tests.
+
+## Pitfalls checklist
+
+- Codex Stop stdout must contain JSON only; gate output goes to a log. Return
+  `{}` on success; block once on failure. When `stop_hook_active` is true, warn
+  and end instead of triggering an infinite continuation. A warning is not a pass.
+- Restart the agent after hook/config changes; an existing session may retain old hooks.
+- Test agent launch plus an actual shell/test command: nested OS sandboxes may fail.
+  Never solve this by disabling the sandbox or adding bypass flags.
+- tmux servers keep old environments. Refresh intended variables explicitly and
+  verify login from the pane; do not print secrets or assume a new shell refreshed it.
+- Set the dotenv opt-out before application imports; isolate real config with a
+  temporary fixture. Socket blocking alone cannot prevent local secret reads.
+- The loop owns Git. Children leave changes unstaged/uncommitted; inspect failures
+  before retrying. Use the project venv and PYTHONPATH for alternate checkouts.
+- Accepted goldens are evidence, not files to refresh until tests pass. Mutation-test
+  important guards. Keep stable ordering and clocks; mock external seams only.
+- Record rejected/not-adopted approaches with evidence, limits and revisit criteria.
+  Read ADRs before retrying; tiny eval sets don't justify broad conclusions. Keep
+  labels owner-controlled and compare metric values, not just a scorer's exit code.
+
+The dotenv/strict-xfail examples illustrate patterns, not adopted product rules.
+The label hook is a local guard; branch protection and owner review enforce policy.
