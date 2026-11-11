@@ -5,22 +5,63 @@ _templates_suffix: .jinja
 project_name:
   type: str
   default: My Project
-package_name:
-  type: str
-  default: my_project
-  validator: "{% if not (package_name | regex_search('^[a-z][a-z0-9_]*$')) or package_name in ['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'] %}Use a lowercase Python identifier{% endif %}"
 language:
   type: str
-  choices: [python]
+  choices: [python, swift]
   default: python
+package_name:
+  type: str
+  default: "{{ 'my_project' if language == 'python' else 'HarnessSample' }}"
+  validator: "{% if not (package_name | regex_search('^[a-z][a-z0-9_]*$' if language == 'python' else '^[A-Za-z][A-Za-z0-9_]*$')) or package_name in ['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield'] or (language == 'swift' and package_name in ['associatedtype', 'deinit', 'enum', 'extension', 'fileprivate', 'func', 'init', 'inout', 'internal', 'let', 'open', 'operator', 'precedencegroup', 'private', 'protocol', 'public', 'rethrows', 'static', 'struct', 'subscript', 'typealias', 'var', 'case', 'default', 'defer', 'do', 'fallthrough', 'guard', 'repeat', 'throw', 'switch', 'where', 'Any', 'false', 'nil', 'self', 'Self', 'super', 'throws', 'true']) %}Use a valid package identifier (lowercase for Python){% endif %}"
 lint_command:
   type: str
+  when: "{{ language == 'python' }}"
   default: python -m ruff format --check . && python -m ruff check .
 test_command:
   type: str
+  when: "{{ language == 'python' }}"
   default: python -m pytest -q
 agents_enabled:
   type: str
   multiselect: true
   choices: [claude, codex]
   default: [claude, codex]
+swift_build_system:
+  type: str
+  when: "{{ language == 'swift' }}"
+  choices: [swiftpm, xcode]
+  default: swiftpm
+xcode_version:
+  type: str
+  help: Exact Xcode version installed on the macos-15 CI image
+  when: "{{ language == 'swift' }}"
+  default: "26.3"
+  validator: "{% if not (xcode_version | regex_search('^[0-9]+[.][0-9]+([.][0-9]+)?$')) %}Use a numeric Xcode version{% endif %}"
+xcode_container_kind:
+  type: str
+  when: "{{ language == 'swift' and swift_build_system == 'xcode' }}"
+  choices: [project, workspace]
+  default: project
+xcode_container:
+  type: str
+  help: Relative path to your existing .xcodeproj or .xcworkspace
+  when: "{{ language == 'swift' and swift_build_system == 'xcode' }}"
+  default: "{{ package_name }}.{{ 'xcworkspace' if xcode_container_kind == 'workspace' else 'xcodeproj' }}"
+xcode_scheme:
+  type: str
+  help: Shared scheme containing the test targets
+  when: "{{ language == 'swift' and swift_build_system == 'xcode' }}"
+  default: "{{ package_name }}"
+xcode_destination:
+  type: str
+  help: "For iOS select an installed simulator, e.g. platform=iOS Simulator,name=iPhone 17,OS=26.2"
+  when: "{{ language == 'swift' and swift_build_system == 'xcode' }}"
+  default: platform=macOS
+swift_sources_dir:
+  type: str
+  when: false
+  default: "{{ 'Sources' if swift_build_system == 'swiftpm' else 'examples/swift/Sources' }}"
+swift_tests_dir:
+  type: str
+  when: false
+  default: "{{ 'Tests' if swift_build_system == 'swiftpm' else 'examples/swift/Tests' }}"

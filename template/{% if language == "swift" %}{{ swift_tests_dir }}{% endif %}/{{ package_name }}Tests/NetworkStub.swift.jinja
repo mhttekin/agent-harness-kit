@@ -1,0 +1,30 @@
+import Foundation
+
+// Only URLSessions created by makeSession() use this stub. Inject those sessions
+// into application code; this is not a process-wide socket or WebSocket firewall.
+final class NetworkStub: URLProtocol, @unchecked Sendable {
+  static func makeSession() -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [NetworkStub.self]
+    configuration.urlCache = nil
+    return URLSession(configuration: configuration)
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    guard let url = request.url, url.absoluteString == "https://example.invalid/fixture" else {
+      client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+      return
+    }
+    let response = URLResponse(
+      url: url, mimeType: "text/plain", expectedContentLength: 7, textEncodingName: "utf-8")
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data("fixture".utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}

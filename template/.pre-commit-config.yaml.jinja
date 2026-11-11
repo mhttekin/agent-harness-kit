@@ -1,6 +1,7 @@
 repos:
   - repo: local
     hooks:
+{% if language == 'python' %}
       - id: ruff-format
         name: ruff format
         entry: .venv/bin/python -m ruff format --check
@@ -11,6 +12,20 @@ repos:
         entry: .venv/bin/python -m ruff check
         language: system
         types: [python]
+{% else %}
+      - id: swift-format
+        name: swift-format check
+        entry: ./scripts/swift-quality.sh format
+        language: system
+        files: \.swift$
+        pass_filenames: false
+      - id: swiftlint
+        name: SwiftLint
+        entry: ./scripts/swift-quality.sh lint
+        language: system
+        files: \.swift$
+        pass_filenames: false
+{% endif %}
       - id: protect-labels
         name: protect eval labels
         entry: .venv/bin/python scripts/protect_labels.py

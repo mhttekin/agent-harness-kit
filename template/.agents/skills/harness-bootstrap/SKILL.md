@@ -34,3 +34,23 @@ description: Interview a project owner, establish minimal invariants, and derive
 7. Run scripts/check.sh and pre-commit; report the mapping from each invariant to
    test or review rule and any uncovered requirement. Propose golden/evals/plans
    only when project behavior warrants them. Keep AGENTS.md minimal on every edit.
+
+## Swift projects
+
+Inspect manifests/projects read-only before choosing SwiftPM or Xcode. Confirm
+platform, shared scheme, test target membership, simulator destination and the
+minimum toolchain. Keep existing project/config files when adopting the harness.
+Use Swift Testing `withKnownIssue(isIntermittent: false)` for strict known issues;
+use snapshot-testing with recording disabled for accepted goldens. Inject test
+URLSessions whose protocolClasses contain the blocking URLProtocol stub. It does
+not block arbitrary sockets, shared sessions or WebSockets; inventory those paths
+and ask whether local callback tests are allowed. Isolate UserDefaults and secrets.
+
+Keep DerivedData in the checkout where possible. Simulator services, SDKs,
+SourceKit and compiler/module caches can need access outside an agent sandbox.
+Preflight build and tests with the intended sandbox and get narrow access approved;
+never disable sandbox restrictions to make a run work. Resolve packages before
+network-restricted sessions. Pin the Xcode version and simulator OS used for image
+goldens. macOS CI costs more than Linux: keep expensive UI/device suites deliberate,
+use timeouts and consider changed-path filters without skipping required gates.
+Do not copy app-specific constraints from the repository used to design this kit.

@@ -1,0 +1,22 @@
+{% if language == 'python' -%}
+#!/usr/bin/env bash
+f="${1:-}"
+[[ "$f" == *.py && -f "$f" ]] || exit 0
+root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -n "$root" && -d "$root/.venv/bin" ]]; then
+  export PATH="$root/.venv/bin:$PATH"
+fi
+ruff format -q "$f"
+ruff check --fix -q "$f" >/dev/null
+out=$(ruff check "$f" 2>&1) || { echo "$out" >&2; exit 2; }
+{% else -%}
+#!/usr/bin/env bash
+set -euo pipefail
+file="${1:-}"
+[[ "$file" == *.swift && -f "$file" ]] || exit 0
+root="$(git rev-parse --show-toplevel)"
+xcrun swift-format format --configuration "$root/.swift-format" --in-place "$file"
+swiftlint lint --config "$root/.swiftlint.yml" --fix --quiet --no-cache "$file"
+xcrun swift-format lint --configuration "$root/.swift-format" --strict "$file"
+swiftlint lint --config "$root/.swiftlint.yml" --strict --quiet --no-cache "$file"
+{% endif %}

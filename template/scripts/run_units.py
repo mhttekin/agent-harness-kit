@@ -42,6 +42,16 @@ def contents(paths):
 
 def protected():
     files = list(Path("evals/labels").rglob("*")) + list(Path("tests/fixtures").rglob("*"))
+    snapshots = git(
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "-z",
+        "--",
+        ":(glob)**/__Snapshots__/**",
+    )
+    files.extend(Path(path) for path in snapshots.split("\0") if path)
     return {
         str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files if path.is_file()
     }

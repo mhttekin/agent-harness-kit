@@ -1,0 +1,20 @@
+import SnapshotTesting
+import Testing
+
+@testable import {{ package_name }}
+
+@Test func descriptionMatchesGolden() {
+  // Never create or refresh a golden just to get a green run.
+  withSnapshotTesting(record: .never) {
+    assertSnapshot(
+      of: HarnessSample.describe("Ada"), as: .lines,
+      named: "baseline", testName: "describe")
+  }
+}
+
+@Test func knownIssueIsStrict() {
+  // Non-intermittent: an unexpected pass is a failure. Remove after fixing the bug.
+  withKnownIssue("Example bug: composed characters count once", isIntermittent: false) {
+    #expect(HarnessSample.characterCount("e\u{301}") == 1)
+  }
+}

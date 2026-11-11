@@ -1,10 +1,16 @@
 # {{ project_name }}
 
-Python agent harness scaffold. Replace the sample package and tests with local contracts.
+{{ language | capitalize }} agent harness scaffold. Replace the sample package and tests with local contracts.
 
 ```sh
 python3 -m venv .venv
+{% if language == 'python' %}
 .venv/bin/python -m pip install -e '.[dev]'
+{% else %}
+.venv/bin/python -m pip install -r requirements-harness.txt
+brew install swiftlint
+# swift-format comes from the selected Xcode toolchain (xcrun swift-format).
+{% endif %}
 git init
 .venv/bin/pre-commit install
 .venv/bin/pre-commit install --hook-type pre-push
@@ -55,3 +61,46 @@ No agents are required for check.sh or offline tests.
 
 The dotenv/strict-xfail examples illustrate patterns, not adopted product rules.
 The label hook is a local guard; branch protection and owner review enforce policy.
+
+## File size ratchet
+
+`scripts/ratchet.sh` reads `.harness/ratchets.tsv`: one line limit, a TAB, and
+an exact file path per row. It works for any text source, including files without
+a final newline. Add rows for your source files; lower caps when files shrink.
+Never raise an accepted cap just to pass a check.
+{% if language == 'swift' %}
+
+## Swift setup and pitfalls
+
+The shared agents, hook adapters and unit loop are Python tools, so keep the
+harness venv even though the application is Swift. The gate runs swift-format,
+SwiftLint, build, tests and the shell ratchet. Resolve SwiftPM dependencies once
+before entering a network-restricted agent session and commit Package.resolved.
+{% if swift_build_system == 'xcode' %}
+
+This scaffold does not generate an Xcode project. Keep your existing project or
+workspace and shared scheme. `.harness/xcode.json` stores the container, scheme
+and test destination as literal arguments. Add the examples/swift sources/tests
+and the SnapshotTesting product (swift-snapshot-testing 1.18.7) to the appropriate
+targets yourself; keep the accepted __Snapshots__ fixtures beside their tests.
+Choose an installed simulator destination for iOS; platform=macOS is the default.
+{% endif %}
+
+- The CI runner is macos-15 with Xcode {{ xcode_version }} selected explicitly.
+  Match that version and simulator OS before accepting UI image snapshots.
+- Build output uses .build (Xcode DerivedData is .build/DerivedData). Compiler
+  caches, SDKs and simulator services can still require sandbox access outside
+  the checkout. Preflight the actual build/test commands; approve narrow access
+  rather than disabling the sandbox. SwiftPM's manifest sandbox is another layer.
+- macOS CI is more expensive than Linux. The workflow has a timeout; separate
+  slow UI/device suites deliberately and consider appropriate path filters.
+- withKnownIssue(isIntermittent: false) fails on an unexpected pass. Remove the
+  wrapper once the pinned bug is fixed; do not make the known issue intermittent.
+- Golden tests use swift-snapshot-testing with record: .never. A missing or
+  changed fixture must fail without writing an accepted golden.
+- NetworkStub blocks unknown requests only on sessions from makeSession(). Inject
+  those sessions; URLSession.shared, sockets and WebSockets need separate guards.
+  Deliberately classify loopback tests instead of assuming all tests are offline.
+- SwiftLint --fix and swift-format edit the single supplied .swift file. The
+  pre-commit hooks and check.sh check formatting without changing source files.
+{% endif %}

@@ -37,6 +37,8 @@ def checkout(tmp_path, monkeypatch):
     Path("sample.py").write_text("value = 1\n")
     Path("evals/labels").mkdir(parents=True)
     Path("evals/labels/sample.json").write_text("{}")
+    Path("Tests/Demo/__Snapshots__").mkdir(parents=True)
+    Path("Tests/Demo/__Snapshots__/sample.txt").write_text("accepted")
     paths = [str(p) for p in Path(".").rglob("*") if p.is_file() and ".git" not in p.parts]
     subprocess.run(["git", "add", "--", *paths], check=True)
     subprocess.run(["git", "commit", "-m", "Baseline"], check=True, capture_output=True)
@@ -61,12 +63,16 @@ def test_loop_commits_only_after_verification(checkout, monkeypatch):
     assert loop.git("status", "--porcelain") == ""
 
 
-@pytest.mark.parametrize("failure", ["labels", "queue", "scope", "staged", "review", "mutation"])
+@pytest.mark.parametrize(
+    "failure", ["labels", "snapshots", "queue", "scope", "staged", "review", "mutation"]
+)
 def test_failure_preserves_changes_without_commit(checkout, monkeypatch, failure):
     def child(*args, **kwargs):
         edit()
         if failure == "labels":
             Path("evals/labels/sample.json").write_text('{"changed":true}')
+        if failure == "snapshots":
+            Path("Tests/Demo/__Snapshots__/sample.txt").write_text("changed")
         if failure == "queue":
             Path(checkout.plan, "features.json").write_text("[]")
         if failure == "scope":

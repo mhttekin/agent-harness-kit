@@ -1,0 +1,45 @@
+{% if language == 'python' %}
+{% raw %}name: CI
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install -e '.[dev]'
+      - run: ./scripts/check.sh
+      - run: .venv/bin/pre-commit run --all-files
+        env:
+          ALLOW_LABEL_EDIT: "1" # CI validates files; local commits protect owner edits.
+{% endraw %}
+{% else %}
+name: CI
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_{{ xcode_version }}.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify pinned Xcode
+        run: xcodebuild -version
+      - run: brew install swiftlint
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install -r requirements-harness.txt
+      - run: ./scripts/check.sh
+      - run: .venv/bin/pre-commit run --all-files
+        env:
+          ALLOW_LABEL_EDIT: "1" # CI validates; local commits protect label edits.
+{% endif %}

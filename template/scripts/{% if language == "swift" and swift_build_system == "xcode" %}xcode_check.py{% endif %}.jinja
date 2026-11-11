@@ -1,0 +1,20 @@
+"""Pass scheme and destination as literal arguments, including spaces."""
+
+import json
+from pathlib import Path
+import subprocess
+
+settings = json.loads(Path(".harness/xcode.json").read_text())
+common = [
+    "xcodebuild",
+    "-" + settings["container_kind"],
+    settings["container"],
+    "-scheme",
+    settings["scheme"],
+    "-destination",
+    settings["destination"],
+    "-derivedDataPath",
+    ".build/DerivedData",
+]
+subprocess.run([*common, "build"], check=True)
+subprocess.run([*common, "test"], check=True)

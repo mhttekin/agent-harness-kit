@@ -1,0 +1,22 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+  name: "{{ package_name }}",
+  platforms: [.macOS(.v14)],
+  products: [.library(name: "{{ package_name }}", targets: ["{{ package_name }}"])],
+  dependencies: [
+    .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.18.7")
+  ],
+  targets: [
+    .target(name: "{{ package_name }}"),
+    .testTarget(
+      name: "{{ package_name }}Tests",
+      dependencies: [
+        "{{ package_name }}",
+        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+      ],
+      exclude: ["__Snapshots__"]
+    ),
+  ]
+)

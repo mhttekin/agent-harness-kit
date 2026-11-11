@@ -1,0 +1,22 @@
+import Foundation
+import Testing
+
+@Test func configuredRequestUsesFixture() async throws {
+  let session = NetworkStub.makeSession()
+  defer { session.invalidateAndCancel() }
+  let url = try #require(URL(string: "https://example.invalid/fixture"))
+  let (data, _) = try await session.data(from: url)
+  #expect(String(decoding: data, as: UTF8.self) == "fixture")
+}
+
+@Test func unstubbedRequestCannotReachNetwork() async throws {
+  let session = NetworkStub.makeSession()
+  defer { session.invalidateAndCancel() }
+  let url = try #require(URL(string: "https://example.invalid/not-stubbed"))
+  do {
+    _ = try await session.data(from: url)
+    Issue.record("Unstubbed request succeeded")
+  } catch let error as URLError {
+    #expect(error.code == .notConnectedToInternet)
+  }
+}

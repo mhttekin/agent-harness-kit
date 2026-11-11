@@ -1,0 +1,9 @@
+# Limits only decrease. Add a row for each file you want to constrain.
+400	scripts/run_units.py
+{% if language == 'python' %}
+400	src/{{ package_name }}/__init__.py
+{% elif swift_build_system == 'swiftpm' %}
+400	Sources/{{ package_name }}/HarnessSample.swift
+{% else %}
+400	examples/swift/Sources/{{ package_name }}/HarnessSample.swift
+{% endif %}

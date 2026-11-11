@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+{% if swift_build_system == 'swiftpm' %}
+swift build
+swift test
+{% else %}
+exec .venv/bin/python scripts/xcode_check.py
+{% endif %}

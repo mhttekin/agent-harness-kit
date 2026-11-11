@@ -2,7 +2,7 @@
 
 Requires Python 3.11 or newer.
 
-Reusable Copier template for a Python repository's agent harness. No product rules,
+Reusable Copier template for Python and Swift repositories' agent harness. No product rules,
 labels, credentials or historical plans are included.
 
 ```sh
@@ -16,11 +16,11 @@ git init
 ./scripts/check.sh
 ```
 
-Questions: project name, Python package identifier, language (currently Python),
+Questions: project name, package identifier, language (Python or Swift),
 lint and test shell commands, and enabled agents (Claude/Codex, either, both or none).
 Commands are trusted user input and run inside check.sh. Language-specific
-rendering branches live in the Python templates; add a language choice and its
-package/config/gate/test renderers together. Python is the only supported choice.
+rendering branches cover package/config/gate/test files; all agent launchers,
+hook adapters, docs, review and eval infrastructure, and loop code are shared.
 No Copier tasks execute automatically. `.copier-answers.yml` supports later updates.
 
 For an existing project, generate into a scratch checkout, merge harness files,
@@ -59,6 +59,45 @@ records, domain-specific experiments and rules deliberately remain in their sour
 
 Run `./scripts/check.sh` in this template repository. It renders a fresh sample
 using the Copier CLI, installs it in an isolated venv, and runs its gate, pre-commit
-and pre-push checks. It also renders Claude-only, Codex-only, and no-agent variants.
+and pre-push checks. It also renders Claude-only, Codex-only, and no-agent variants. On macOS it
+verifies a SwiftPM sample and renders Xcode project/workspace variants. Install
+SwiftLint first (`brew install swiftlint`); swift-format comes with Xcode.
 First installation may need package-index access. No paid model sessions run.
 Copier configuration reference: https://copier.readthedocs.io/en/stable/configuring/
+
+## Swift
+
+```sh
+copier copy --vcs-ref=v0.2.0 -d language=swift \
+  https://github.com/mhttekin/agent-harness-kit.git /tmp/swift-harness
+```
+
+Install Copier separately if the command is missing, or use `.venv/bin/copier`
+from this kit after installing requirements-dev.txt. The Swift application uses
+SwiftPM by default; shared harness scripts still need a Python 3.11+ venv.
+Swift questions select SwiftPM or Xcode, an exact CI Xcode version (default 26.3),
+and for Xcode the existing project/workspace, shared scheme and destination.
+Scheme and destination values are stored as JSON, never evaluated as shell code.
+Xcode mode emits adoption examples, not an invented .xcodeproj; integrate those
+with your existing targets and SnapshotTesting dependency. Python's commands,
+sample and CI matrix retain their existing behavior.
+
+The gate checks swift-format and SwiftLint, builds, runs tests, and applies the
+shared shell size ratchet. Swift examples demonstrate strict known issues,
+non-recording snapshot goldens and injected URLSession network blocking. The
+URLProtocol stub is not a socket firewall and does not guard URLSession.shared.
+Package resolution downloads dependencies; the tests themselves use fixtures.
+
+Swift pitfalls: DerivedData, compiler caches and simulator services may require
+narrow access outside an agent sandbox. Resolve packages before restricted agent
+sessions; never disable sandboxing to fix access failures. Match Xcode and
+simulator versions for image goldens. macOS CI costs more than Linux; use the
+provided timeout and deliberately scope expensive UI/device suites.
+
+The pinned [Xcode 26.3 on macos-15](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+is a CI selection; the sample requires Swift 6.0 or newer locally. Format output
+can differ by Xcode version, so recheck it when changing the toolchain pin.
+
+The language-neutral size gate reads `.harness/ratchets.tsv` (limit<TAB>path).
+Add source paths explicitly and lower their caps as files shrink. No production
+project was modified while developing or verifying these examples.

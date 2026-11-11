@@ -10,3 +10,9 @@ evals/results/*.json
 !evals/results/baseline.json
 evals/reviewer/.work/
 evals/reviewer/runs/
+{% if language == 'swift' %}
+.build/
+.swiftpm/
+DerivedData/
+.swiftlint_cache
+{% endif %}

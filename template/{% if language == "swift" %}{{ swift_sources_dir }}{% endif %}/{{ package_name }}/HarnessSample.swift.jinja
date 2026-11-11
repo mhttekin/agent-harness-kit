@@ -1,0 +1,11 @@
+/// Small demonstration contract; replace with your own application behavior.
+public enum HarnessSample {
+  public static func describe(_ name: String) -> String {
+    "name=\(name)\nlength=\(name.count)\n"
+  }
+
+  // Deliberate sample bug: scalar counts do not count user-visible characters.
+  public static func characterCount(_ name: String) -> Int {
+    name.unicodeScalars.count
+  }
+}
