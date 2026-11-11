@@ -51,6 +51,8 @@ and are excluded from the offline gate.
 - ADRs need metrics, limitations and revisit conditions. Re-read rejected approaches
   before retrying; sparse labels do not prove general improvements. Compare every
   metric rather than assuming an eval command's success implies no regression.
+- Chain multi-step shell commands with `&&` or `set -e`; a failed step must stop the
+  sequence. An agent once kept going after `git switch -c` failed and ran Copier on `main`.
 
 These are generalized lessons extracted from harness progress logs and decision
 records, domain-specific experiments and rules deliberately remain in their source.
