@@ -53,7 +53,7 @@ and are excluded from the offline gate.
   metric rather than assuming an eval command's success implies no regression.
 
 These are generalized lessons extracted from harness progress logs and decision
-records; domain-specific experiments and rules deliberately remain in their source.
+records, domain-specific experiments and rules deliberately remain in their source.
 
 ## Maintainer verification
 
