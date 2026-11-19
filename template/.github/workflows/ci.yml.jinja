@@ -30,6 +30,10 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_{{ xcode_version }}.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+{% if swift_adoption == 'existing' %}
+        with:
+          fetch-depth: 0 # swift-format checks files changed since the merge-base with main
+{% endif %}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

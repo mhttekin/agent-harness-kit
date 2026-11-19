@@ -20,3 +20,6 @@
 
 ## Git
 <!-- Repository-specific commit/branch policy and loop ownership. -->
+- Interactive sessions (`scripts/agent.sh`) may commit and push non-main branches. Never push to `main`,
+  force-push or use `--no-verify`; the launcher denies these too.
+- Loop runs (`scripts/run_units.sh`) leave Git to the loop: no staging, commits or pushes.

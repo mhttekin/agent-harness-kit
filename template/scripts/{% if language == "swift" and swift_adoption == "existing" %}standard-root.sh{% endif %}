@@ -1,0 +1,14 @@
+# Sourced by the scripts that run SwiftLint against .harness/swiftlint-baseline.json.
+# The checkout's root as Foundation standardises it. SwiftLint matches baseline entries by path relative to a
+# standardised current directory, which drops `/private` from `/private/tmp` and `/private/var`, while a relative
+# file argument becomes absolute under the real `/private/...` path. Then nothing matches and every baselined
+# violation is reported as new (found in an adopted project). Absolute arguments in the standardised form match anywhere.
+standard_root() {
+  local root
+  root="$(pwd -P)"
+  case "$root" in
+    /private/tmp/* | /private/var/* | /private/etc/*)
+      [[ "$(cd -- "${root#/private}" 2>/dev/null && pwd -P)" == "$root" ]] && root="${root#/private}" ;;
+  esac
+  printf '%s' "$root"
+}

@@ -1,4 +1,8 @@
-"""Shared interactive/batch launch adapters; Git remains owned by the loop."""
+"""Shared interactive/batch launch adapters.
+
+Git differs by mode. Loop (batch) runs keep `.git` read-only: the loop owns staging and commits. Interactive
+sessions may commit and push non-main branches, as AGENTS.md "Git" allows, so they get `.git` writable; pushing to
+`main`, force-pushing and `--no-verify` stay denied. Every launch first checks the agent's CLI is logged in."""
 
 import json
 import os
@@ -11,6 +15,44 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 ENABLED = {{ agents_enabled | to_json }}
+LOGIN_STATUS = {"claude": ["claude", "auth", "status"], "codex": ["codex", "login", "status"]}
+# Claude Code permission rules for interactive sessions: AGENTS.md "Git" forbids these, whatever the sandbox allows.
+GIT_DENY = [
+    "Bash(git push * main)",
+    "Bash(git push * main *)",
+    "Bash(git push *:main)",
+    "Bash(git push *:main *)",
+    "Bash(git push * refs/heads/main)",
+    "Bash(git push *:refs/heads/main)",
+    "Bash(git push --force*)",
+    "Bash(git push -f*)",
+    "Bash(git push * --force*)",
+    "Bash(git push * -f*)",
+    "Bash(git commit * --no-verify*)",
+    "Bash(git commit --no-verify*)",
+    "Bash(git push * --no-verify*)",
+    "Bash(git push --no-verify*)",
+]
+
+
+def require_login(agent, env):
+    """Stop before launching when the agent's CLI isn't logged in, instead of failing inside the session."""
+    try:
+        done = subprocess.run(
+            LOGIN_STATUS[agent], env=env, capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        sys.exit(f"{agent}: could not check the login ({error}).")
+    logged_in = done.returncode == 0
+    if agent == "claude" and logged_in:
+        try:
+            logged_in = json.loads(done.stdout).get("loggedIn") is True
+        except ValueError:
+            logged_in = False
+    if not logged_in:
+        sys.exit(
+            f"{agent} is not logged in: run `{' '.join(LOGIN_STATUS[agent][:2])} login`, then try again."
+        )
 
 
 @contextmanager
@@ -19,6 +61,7 @@ def agent_environment(agent):
     # Application keys should not silently override a CLI subscription login.
     env.pop("ANTHROPIC_API_KEY", None)
     if agent == "claude":
+        require_login(agent, env)
         yield env
         return
     auth = Path(env.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
@@ -29,12 +72,42 @@ def agent_environment(agent):
         if auth.is_file():
             shutil.copyfile(auth, scoped / "auth.json")
             (scoped / "auth.json").chmod(0o600)
+        require_login(agent, env)
         yield env
 
 
+def git_dir():
+    return subprocess.check_output(["git", "rev-parse", "--absolute-git-dir"], text=True).strip()
+
+
+def claude_settings(interactive, gitdir):
+    if interactive:
+        # `.git` stays writable so commits work; only GitHub is reachable, for pushing a branch.
+        filesystem, domains = {}, ["github.com"]
+        permissions = {"deny": GIT_DENY}
+    else:
+        filesystem, domains = {"denyWrite": [gitdir]}, []
+        permissions = {}
+    settings = {
+        "autoMemoryEnabled": False,
+        "sandbox": {
+            "enabled": True,
+            "failIfUnavailable": True,
+            "allowUnsandboxedCommands": False,
+            "filesystem": filesystem,
+            "network": {"allowedDomains": domains},
+        },
+    }
+    if permissions:
+        settings["permissions"] = permissions
+    return settings
+
+
 def command(agent, args, prompt=None):
+    """Batch (loop) when a prompt is given, interactive otherwise."""
     if agent not in ENABLED:
         raise ValueError(f"Agent is not enabled: {agent}")
+    interactive = prompt is None
     if agent == "codex":
         common = [
             "--sandbox",
@@ -42,46 +115,34 @@ def command(agent, args, prompt=None):
             "-c",
             "sandbox_workspace_write.network_access=false",
         ]
-        return (
-            [agent, "-a", "never", "exec", *common, "--json", prompt]
-            if prompt is not None
-            else [agent, *common, *args]
-        )
-    gitdir = subprocess.check_output(["git", "rev-parse", "--absolute-git-dir"], text=True).strip()
-    settings = {
-        "autoMemoryEnabled": False,
-        "sandbox": {
-            "enabled": True,
-            "failIfUnavailable": True,
-            "allowUnsandboxedCommands": False,
-            "filesystem": {"denyWrite": [gitdir]},
-            "network": {"allowedDomains": []},
-        },
-    }
+        if not interactive:
+            return [agent, "-a", "never", "exec", *common, "--json", prompt]
+        # workspace-write keeps `.git` read-only unless it's a writable root. With no network, a push goes through
+        # Codex's approval prompt, so the person approves each one.
+        writable = json.dumps([git_dir()])
+        return [agent, *common, "-c", f"sandbox_workspace_write.writable_roots={writable}", *args]
     common = [
         "--setting-sources",
         "project",
         "--settings",
-        json.dumps(settings),
+        json.dumps(claude_settings(interactive, git_dir())),
         "--strict-mcp-config",
         "--mcp-config",
         '{"mcpServers":{}}',
     ]
-    return (
-        [
-            agent,
-            "-p",
-            prompt,
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--permission-mode",
-            "dontAsk",
-            *common,
-        ]
-        if prompt is not None
-        else [agent, *common, *args]
-    )
+    if interactive:
+        return [agent, *common, *args]
+    return [
+        agent,
+        "-p",
+        prompt,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--permission-mode",
+        "dontAsk",
+        *common,
+    ]
 
 
 def wait(command_args, env, timeout=None, **kwargs):

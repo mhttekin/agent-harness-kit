@@ -22,7 +22,11 @@ Bootstrap using `.agents/skills/harness-bootstrap/SKILL.md`. Claude users can in
 Adopt in order: AGENTS.md → gates → hooks → invariant tests → golden → evals →
 reviewer → plans/loop. Add each layer only when its predecessor provides value.
 
-Use `scripts/agent.sh <enabled-agent>` for interactive work. Hooks load at session
+Use `scripts/agent.sh <enabled-agent>` for interactive work. Interactive sessions may
+commit and push non-main branches (`.git` writable, network limited to GitHub for
+Claude; Codex asks before each push); pushing to `main`, force-pushing and
+`--no-verify` are denied. Loop runs keep `.git` read-only. Every launch first checks
+the CLI login (`claude auth status`, `codex login status`). Hooks load at session
 startup: restart after changing them. The bootstrap must configure review rules
 before the loop can complete work. Copy docs/plans/template to a named plan, fill
 its queue (schema next to it), then try:
@@ -103,6 +107,30 @@ Choose an installed simulator destination for iOS; platform=macOS is the default
 - NetworkStub blocks unknown requests only on sessions from makeSession(). Inject
   those sessions; URLSession.shared, sockets and WebSockets need separate guards.
   Deliberately classify loopback tests instead of assuming all tests are offline.
-- SwiftLint --fix and swift-format edit the single supplied .swift file. The
-  pre-commit hooks and check.sh check formatting without changing source files.
+- The post-edit hook formats the single edited .swift file with swift-format. It
+  doesn't run `swiftlint --fix`: empty_count autocorrect can rewrite a custom
+  `count == 0` as `.isEmpty`, which may not compile. The pre-commit hooks and
+  check.sh check formatting without changing source files.
+- Under the Command Line Tools (no full Xcode selected), SwiftLint can't find
+  sourcekitd by itself; the lint scripts export TOOLCHAIN_DIR for it.
+{% if swift_adoption == 'existing' %}
+
+## Existing code: gate only new violations
+
+This harness was rendered for existing code (`swift_adoption: existing`), so the
+gate doesn't fail on code nobody touched. Record the decision and its numbers in
+`docs/decisions/0001-gate-new-format-and-lint-only.md`.
+
+- Set `.swift-format` to the code's existing style (indentation, line length)
+  first; don't reformat the codebase to match the template's default.
+- swift-format checks only Swift files changed since the merge-base with `main`
+  (`HEAD~1` when on `main`; `HARNESS_BASE_REF` overrides). CI fetches full history.
+- SwiftLint checks every file against `.harness/swiftlint-baseline.json`. The owner
+  writes it once with `scripts/swift-quality.sh write-baseline` and commits it.
+  Never regenerate it to make a change pass; shrink it as old violations go.
+- The first edit to an old file reformats that whole file through the hook.
+- When adopting, keep the project's own Package.swift and build scripts: render
+  with `--skip` for files that exist and `--exclude Sources --exclude Tests
+  --exclude Package.swift` to leave out the sample package.
+{% endif %}
 {% endif %}

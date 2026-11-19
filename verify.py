@@ -36,6 +36,87 @@ def render_swift(dest, **answers):
     call(*argv, str(ROOT), str(dest))
 
 
+def git_commit(cwd, message):
+    call(
+        "git",
+        "-c",
+        "user.name=verify",
+        "-c",
+        "user.email=verify@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        message,
+        cwd=cwd,
+    )
+
+
+def fails(*args, cwd, env=None):
+    return subprocess.run(args, cwd=cwd, env=env, capture_output=True).returncode != 0
+
+
+def verify_swift_existing(scratch, venv):
+    """Existing-code mode: format only changed files, SwiftLint against a portable baseline."""
+    sample = scratch / "swiftpm-existing"
+    render_swift(sample, swift_adoption="existing")
+    for relative in (
+        "scripts/standard-root.sh",
+        "harness_tests/test_lint_paths.py",
+        "docs/decisions/0001-gate-new-format-and-lint-only.md",
+    ):
+        assert (sample / relative).exists(), relative
+    assert "fetch-depth: 0" in (sample / ".github/workflows/ci.yml").read_text()
+    legacy = sample / "Sources/tiny_swift/Legacy.swift"
+    legacy.write_text(
+        "import Foundation\n\npublic func legacy() -> Data {\n  try! JSONEncoder().encode([1])\n}\n"
+    )
+    call("git", "init", "-q", "-b", "main", cwd=sample)
+    call("git", "add", "-A", cwd=sample)
+    git_commit(sample, "adopt")
+    call("git", "switch", "-q", "-c", "feature", cwd=sample)
+    quality = "./scripts/swift-quality.sh"
+    assert fails(quality, "lint", cwd=sample), "Lint passed without a baseline"
+    call(quality, "write-baseline", cwd=sample)
+    entries = json.loads((sample / ".harness/swiftlint-baseline.json").read_text())
+    assert [e["violation"]["location"]["file"] for e in entries] == [
+        "Sources/tiny_swift/Legacy.swift"
+    ]
+    call(quality, "all", cwd=sample)
+    call("git", "add", "-A", cwd=sample)
+    git_commit(sample, "baseline")
+    clone = scratch / "swiftpm-existing-clone"
+    call("git", "clone", "-q", "--branch", "feature", str(sample), str(clone))
+    call(quality, "lint", cwd=clone)  # the baseline matches in another checkout
+    fresh = sample / "Sources/tiny_swift/Fresh.swift"
+    fresh.write_text(
+        "import Foundation\n\npublic func fresh() -> Data {\n  try! JSONEncoder().encode([2])\n}\n"
+    )
+    assert fails(quality, "lint", cwd=sample), "A new SwiftLint violation passed"
+    call(quality, "format", cwd=sample)
+    fresh.write_text("public func fresh() {\n      let x =  1\n  _ = x\n}\n")
+    assert fails(quality, "format", cwd=sample), "A badly formatted changed file passed"
+    call("./scripts/fix-file.sh", str(fresh), cwd=sample)
+    call(quality, "all", cwd=sample)
+    fresh.unlink()
+    env = dict(os.environ, HARNESS_BASE_REF="no-such-ref")
+    assert fails(quality, "format", cwd=sample, env=env), "A missing base passed as no changes"
+    call("git", "switch", "-q", "main", cwd=sample)
+    call("git", "merge", "-q", "feature", cwd=sample)
+    (sample / "Sources/tiny_swift/Direct.swift").write_text(
+        "public func direct() {\n      let x =  1\n}\n"
+    )
+    call("git", "add", "-A", cwd=sample)
+    git_commit(sample, "direct")
+    assert fails(quality, "format", cwd=sample), "A direct commit on main skipped the format check"
+    call(str(venv / "bin/python"), "-m", "pytest", "-q", "harness_tests", cwd=sample)
+    clt = Path("/Library/Developer/CommandLineTools")
+    if clt.is_dir():
+        call(quality, "lint", cwd=clone, env=dict(os.environ, DEVELOPER_DIR=str(clt)))
+    print(
+        "PASS: existing-code mode: changed-file format, portable SwiftLint baseline, main checks."
+    )
+
+
 def verify_swift(scratch, python_sample):
     sample = scratch / "swiftpm"
     render_swift(sample)
@@ -113,6 +194,11 @@ def verify_swift(scratch, python_sample):
     finally:
         source.write_text(original)
     call("./scripts/check.sh", cwd=sample)
+    hook = (sample / "scripts/fix-file.sh").read_text().splitlines()
+    assert not [line for line in hook if line.startswith("swiftlint") and "--fix" in line]
+    assert not (sample / "scripts/standard-root.sh").exists()
+    assert not (sample / "docs/decisions/0001-gate-new-format-and-lint-only.md").exists()
+    verify_swift_existing(scratch, sample / ".venv")
     # Resolve dependencies before staging them in a real adopted project.
     assert (sample / "Package.resolved").exists()
     for kind in ("project", "workspace"):

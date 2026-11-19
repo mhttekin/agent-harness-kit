@@ -25,6 +25,16 @@ No Copier tasks execute automatically. `.copier-answers.yml` supports later upda
 
 For an existing project, generate into a scratch checkout, merge harness files,
 and keep the existing package/build configuration; do not overwrite it blindly.
+Swift projects can render with `-d swift_adoption=existing`: swift-format checks only
+files changed since the merge-base with `main` (`HEAD~1` on `main`), and SwiftLint
+fails only on violations missing from `.harness/swiftlint-baseline.json`, which the
+owner writes once with `scripts/swift-quality.sh write-baseline`. It also renders an
+ADR to record the decision. Keep the project's Package.swift with `--skip` and leave
+out the sample with `--exclude Sources --exclude Tests --exclude Package.swift`.
+
+`scripts/agent.sh` launches by mode: interactive sessions may commit and push non-main
+branches (pushing to `main`, force-pushing and `--no-verify` are denied), loop runs keep
+`.git` read-only, and every launch first checks the agent CLI's login.
 Run `.agents/skills/harness-bootstrap/SKILL.md` to interview the owner, write a
 minimal local AGENTS.md and derive tests and review rules from those invariants.
 
@@ -70,7 +80,7 @@ Copier configuration reference: https://copier.readthedocs.io/en/stable/configur
 ## Swift
 
 ```sh
-copier copy --vcs-ref=v0.2.0 -d language=swift \
+copier copy --vcs-ref=v0.3.0 -d language=swift \
   https://github.com/mhttekin/agent-harness-kit.git /tmp/swift-harness
 ```
 
@@ -78,7 +88,9 @@ Install Copier separately if the command is missing, or use `.venv/bin/copier`
 from this kit after installing requirements-dev.txt. The Swift application uses
 SwiftPM by default; shared harness scripts still need a Python 3.11+ venv.
 Swift questions select SwiftPM or Xcode, an exact CI Xcode version (default 26.3),
-and for Xcode the existing project/workspace, shared scheme and destination.
+`swift_adoption` (`new` gates every file; `existing` gates only new format and lint
+violations, for adopting into code you won't reformat), and for Xcode the existing
+project/workspace, shared scheme and destination.
 Scheme and destination values are stored as JSON, never evaluated as shell code.
 Xcode mode emits adoption examples, not an invented .xcodeproj; integrate those
 with your existing targets and SnapshotTesting dependency. Python's commands,

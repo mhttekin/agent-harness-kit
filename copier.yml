@@ -31,6 +31,12 @@ swift_build_system:
   when: "{{ language == 'swift' }}"
   choices: [swiftpm, xcode]
   default: swiftpm
+swift_adoption:
+  type: str
+  help: "new: gate every Swift file. existing: swift-format checks only files changed since the merge-base with main; SwiftLint fails only on violations missing from a baseline"
+  when: "{{ language == 'swift' }}"
+  choices: [new, existing]
+  default: new
 xcode_version:
   type: str
   help: Exact Xcode version installed on the macos-15 CI image

@@ -1,0 +1,40 @@
+"""SwiftLint gets file paths in Foundation's standardised form, so the baseline matches in any checkout:
+in a checkout under /private/tmp, relative paths reported every baselined violation as new."""
+
+import subprocess
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def standard_root(directory):
+    script = f"source {ROOT / 'scripts/standard-root.sh'} && standard_root"
+    return subprocess.check_output(["bash", "-c", script], cwd=directory, text=True)
+
+
+def test_private_is_dropped_where_foundation_drops_it():
+    if not Path("/private/tmp").is_dir() or Path("/tmp").resolve() != Path("/private/tmp"):
+        pytest.skip("no /tmp -> /private/tmp link here")
+    real = Path(
+        subprocess.check_output(["mktemp", "-d", "/private/tmp/lint-paths.XXXXXX"], text=True).strip()
+    )
+    try:
+        assert standard_root(real) == str(real).removeprefix("/private")
+    finally:
+        real.rmdir()
+
+
+def test_other_roots_are_unchanged(tmp_path):
+    for directory in (ROOT, tmp_path):
+        real = str(Path(directory).resolve())
+        if not real.startswith(("/private/tmp/", "/private/var/", "/private/etc/")):
+            assert standard_root(directory) == real
+
+
+@pytest.mark.parametrize("script", ["scripts/swift-quality.sh", "scripts/fix-file.sh"])
+def test_every_baseline_lint_uses_the_standard_root(script):
+    text = (ROOT / script).read_text()
+    assert "source scripts/standard-root.sh" in text
+    assert "standard_root" in text.split("source scripts/standard-root.sh", 1)[1]

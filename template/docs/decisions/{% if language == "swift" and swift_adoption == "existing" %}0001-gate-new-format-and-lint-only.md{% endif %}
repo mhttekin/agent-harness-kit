@@ -1,0 +1,38 @@
+# 0001 — Gate only new format and lint violations
+
+- Status: proposed
+- Date: <date the harness was adopted>
+
+## Context
+The harness was adopted into existing Swift code without reformatting it. Gating every file would fail on code
+nobody touched, and reformatting it all at once is a large, unreviewed diff.
+
+## What was tried
+<Run `xcrun swift-format lint --strict` and `swiftlint lint --strict` over every tracked Swift file, with
+`.swift-format` set to the code's existing style (indentation, line length), and record the counts here.>
+
+## Evidence
+<The warning counts above, and `.harness/swiftlint-baseline.json` (how many violations, which rules) as committed.>
+
+## Limitations
+- A file is formatted as a whole once it changes, so the first edit to an old file brings that file's full
+  reformatting into the diff. The post-edit hook (`scripts/fix-file.sh`) formats the edited file in place.
+- On `main` the base is `HEAD~1`, so a push of several direct commits checks only the last one's files.
+- swift-format output can differ between versions; the CI Xcode pin and local toolchains may disagree.
+- The SwiftLint baseline matches violations by file, rule and line content. Moving or renaming a file, or editing
+  an offending line, can surface its old violation as new.
+- SwiftLint relativises paths against Foundation's standardised current directory, which drops `/private` from
+  `/private/tmp` and `/private/var`. The lint scripts pass absolute paths in that form (`scripts/standard-root.sh`)
+  so the baseline matches in any checkout.
+
+## Decision
+- swift-format checks only Swift files changed since the merge-base with `main` (`origin/main` when there's no
+  local `main`; `HARNESS_BASE_REF` overrides). On `main` itself it compares with `HEAD~1`, so direct commits are
+  checked too. Committed, staged, unstaged and untracked files count. See `scripts/swift-quality.sh`.
+- SwiftLint checks every Swift file with `--baseline .harness/swiftlint-baseline.json`, so only new violations fail.
+  The owner writes the baseline once: `scripts/swift-quality.sh write-baseline`.
+- Don't regenerate the baseline to make a change pass. Regenerate it only to shrink it after fixing old violations.
+
+## Revisit if
+- The whole codebase is reformatted in one deliberate change; then switch to gating every file and drop the baseline.
+- The baseline is empty, or the changed-files check misses violations that reach `main`.

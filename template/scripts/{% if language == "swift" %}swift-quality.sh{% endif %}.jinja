@@ -1,11 +1,102 @@
 {% raw %}#!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+# SwiftLint finds sourcekitd through Xcode's layout; under the Command Line Tools it must be pointed at them.
+developer_dir="${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || true)}"
+[[ "$developer_dir" == /Library/Developer/CommandLineTools ]] && export TOOLCHAIN_DIR="$developer_dir"
 # Git's ignores exclude .build, DerivedData, downloaded packages and virtualenvs.
+all_files() { git ls-files --cached --others --exclude-standard -z -- '*.swift'; }
+{% endraw %}{% if swift_adoption == 'existing' %}{% raw %}
+# Existing code: see docs/decisions/0001-gate-new-format-and-lint-only.md.
+source scripts/standard-root.sh
+baseline=.harness/swiftlint-baseline.json
+
+# Sets `base` in the calling shell: an `exit` inside the `< <(...)` that lists the files would only end that subshell,
+# and a missing base would then pass as "no changed files".
+resolve_base() {
+  local ref
+  ref="${HARNESS_BASE_REF:-}"
+  if [[ -z "$ref" ]]; then
+    for candidate in main origin/main; do
+      git rev-parse --verify --quiet "$candidate^{commit}" >/dev/null && { ref="$candidate"; break; }
+    done
+  fi
+  [[ -n "$ref" ]] || { echo 'swift-quality: no main or origin/main to diff against (set HARNESS_BASE_REF)' >&2; exit 1; }
+  if [[ "$(git symbolic-ref --short -q HEAD || true)" == main ]]; then
+    # On main the merge-base is HEAD, so a direct commit would never be checked: compare with the commit before it.
+    # The first commit has none, so it compares with the empty tree.
+    base="$(git rev-parse --verify --quiet 'HEAD~1^{commit}' || git hash-object -t tree /dev/null)"
+  else
+    base="$(git merge-base HEAD "$ref")" || { echo "swift-quality: no merge-base with $ref" >&2; exit 1; }
+  fi
+}
+
+changed_files() {
+  # Committed, staged and unstaged changes since the base, plus new untracked files. Deleted files are skipped.
+  { git diff --name-only -z --diff-filter=ACMR "$base" -- '*.swift'
+    git ls-files --others --exclude-standard -z -- '*.swift'; } | sort -zu
+}
+
+# Linting matches baseline entries only for absolute paths in Foundation's standardised form (any checkout).
+lint_files() {
+  local root file
+  root="$(standard_root)"
+  files=()
+  while IFS= read -r -d '' file; do
+    [[ -f "$file" ]] && files+=("$root/$file")
+  done < <(all_files)
+  [[ ${#files[@]} -gt 0 ]] || { echo 'No Swift sources found.' >&2; exit 1; }
+}
+
+check_format() {
+  local files=() file base
+  resolve_base
+  while IFS= read -r -d '' file; do
+    [[ -f "$file" ]] && files+=("$file")
+  done < <(changed_files)
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo 'swift-format: no changed Swift files'
+    return 0
+  fi
+  xcrun swift-format lint --strict "${files[@]}"
+}
+
+check_lint() {
+  [[ -f "$baseline" ]] || {
+    echo "swift-quality: $baseline is missing; the owner writes it once with: scripts/swift-quality.sh write-baseline" >&2
+    exit 1
+  }
+  lint_files
+  swiftlint lint --strict --quiet --no-cache --baseline "$baseline" "${files[@]}"
+}
+
+# An owner decision: records today's violations as accepted. Never rerun it to make a change pass.
+# It's written from relative paths: standardised absolute ones would store this checkout's location in every entry.
+write_baseline() {
+  local file
+  files=()
+  while IFS= read -r -d '' file; do
+    [[ -f "$file" ]] && files+=("$file")
+  done < <(all_files)
+  [[ ${#files[@]} -gt 0 ]] || { echo 'No Swift sources found.' >&2; exit 1; }
+  rm -f "$baseline"
+  swiftlint lint --quiet --no-cache --write-baseline "$baseline" "${files[@]}" >/dev/null || true
+  [[ -f "$baseline" ]] || { echo "swift-quality: SwiftLint did not write $baseline" >&2; exit 1; }
+  echo "Wrote $baseline"
+}
+
+case "${1:-all}" in
+  format) check_format ;;
+  lint) check_lint ;;
+  all) check_format; check_lint ;;
+  write-baseline) write_baseline ;;
+  *) echo 'usage: swift-quality.sh [format|lint|all|write-baseline]' >&2; exit 2 ;;
+esac
+{% endraw %}{% else %}{% raw %}
 files=()
 while IFS= read -r -d '' file; do
   [[ -f "$file" ]] && files+=("$file")
-done < <(git ls-files --cached --others --exclude-standard -z -- '*.swift')
+done < <(all_files)
 [[ ${#files[@]} -gt 0 ]] || { echo 'No Swift sources found.' >&2; exit 1; }
 case "${1:-all}" in
   format) xcrun swift-format lint --strict "${files[@]}" ;;
@@ -16,4 +107,4 @@ case "${1:-all}" in
     ;;
   *) echo 'usage: swift-quality.sh [format|lint|all]' >&2; exit 2 ;;
 esac
-{% endraw %}
+{% endraw %}{% endif %}
