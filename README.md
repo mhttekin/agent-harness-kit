@@ -62,7 +62,14 @@ and are excluded from the offline gate.
   before retrying; sparse labels do not prove general improvements. Compare every
   metric rather than assuming an eval command's success implies no regression.
 - Chain multi-step shell commands with `&&` or `set -e`; a failed step must stop the
-  sequence. An agent once kept going after `git switch -c` failed and ran Copier on `main`.
+  sequence. An agent once kept going after `git switch -c` failed and ran Copier on `main`,
+  and later made a mislabelled commit after an earlier one was refused. A rule alone didn't
+  hold, so a PreToolUse hook (`scripts/bash_guard.py`, Claude and Codex) now blocks
+  `git commit`/`push`/`switch` chained with `;`, newlines or `&` unless errexit is on.
+- Tests run by a git hook inherit GIT_DIR and GIT_INDEX_FILE: a test's `git init`,
+  `config` or `commit` in a temporary repository then hits the real one. The test
+  conftest clears `git rev-parse --local-env-vars`; verify.py runs each sample suite
+  with GIT_DIR on a scratch repository and checks it is untouched.
 
 These are generalized lessons extracted from harness progress logs and decision
 records, domain-specific experiments and rules deliberately remain in their source.

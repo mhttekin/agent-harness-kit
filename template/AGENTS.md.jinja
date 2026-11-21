@@ -13,7 +13,8 @@
 
 ## Conventions
 <!-- Only conventions not enforced by tools. -->
-- Chain multi-step shell commands with `&&` or `set -e`; a failed step must stop the sequence.
+- Chain multi-step shell commands with `&&` or `set -e`; a failed step must stop the sequence. A PreToolUse
+  hook blocks chained `git commit`/`push`/`switch` without errexit.
 
 ## Evals
 <!-- Ground-truth ownership and evaluation commands, if applicable. -->

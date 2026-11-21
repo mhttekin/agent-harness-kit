@@ -1,5 +1,5 @@
-{% if language == 'python' %}
-{% raw %}name: CI
+{% if language == 'python' -%}
+{% raw -%}name: CI
 on: [push, pull_request]
 jobs:
   check:
@@ -18,8 +18,8 @@ jobs:
       - run: .venv/bin/pre-commit run --all-files
         env:
           ALLOW_LABEL_EDIT: "1" # CI validates files; local commits protect owner edits.
-{% endraw %}
-{% else %}
+{% endraw -%}
+{% else -%}
 name: CI
 on: [push, pull_request]
 jobs:
@@ -30,10 +30,10 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_{{ xcode_version }}.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
-{% if swift_adoption == 'existing' %}
+{%- if swift_adoption == 'existing' %}
         with:
           fetch-depth: 0 # swift-format checks files changed since the merge-base with main
-{% endif %}
+{%- endif %}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -46,4 +46,4 @@ jobs:
       - run: .venv/bin/pre-commit run --all-files
         env:
           ALLOW_LABEL_EDIT: "1" # CI validates; local commits protect label edits.
-{% endif %}
+{% endif -%}

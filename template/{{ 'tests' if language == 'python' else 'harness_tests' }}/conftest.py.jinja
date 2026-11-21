@@ -1,0 +1,31 @@
+"""Isolation that must happen before any test runs, and before application imports during collection.
+
+Git hooks export GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE and similar variables to their children. Under a
+pre-commit or pre-push hook, a test's own `git init`, `git config` or `git commit` in a temporary repository then
+acts on the real repository instead: in one adopted project it set core.bare and core.hooksPath, wrote a test
+user.name and user.email, and committed onto the branch being pushed. Clearing every variable that
+`git rev-parse --local-env-vars` names makes each `git` call find its repository from its working directory.
+"""
+
+import os
+import subprocess
+
+import pytest
+
+for name in subprocess.run(
+    ["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, check=True
+).stdout.split():
+    os.environ.pop(name, None)
+{%- if language == 'python' %}
+
+os.environ["HARNESS_NO_DOTENV"] = "1"
+os.environ.pop("EXAMPLE_SETTING", None)
+
+
+@pytest.fixture
+def tmp_config(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    path.write_text("{}")
+    monkeypatch.setenv("APP_CONFIG_PATH", str(path))
+    return path
+{%- endif %}

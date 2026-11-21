@@ -14,6 +14,13 @@ from scripts import run_units as loop
 @pytest.fixture
 def checkout(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    # Under a git hook, GIT_DIR and friends would point these calls at the real repository (conftest.py clears
+    # them too; this fixture must stay safe on its own).
+    names = subprocess.run(
+        ["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    for name in names:
+        monkeypatch.delenv(name, raising=False)
     for args in (
         ("init", "-b", "main"),
         ("config", "user.name", "Harness Test"),

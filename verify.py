@@ -55,6 +55,35 @@ def fails(*args, cwd, env=None):
     return subprocess.run(args, cwd=cwd, env=env, capture_output=True).returncode != 0
 
 
+def assert_ci_has_no_blank_lines(sample):
+    text = (sample / ".github/workflows/ci.yml").read_text()
+    lines = text.split("\n")
+    assert text.endswith("\n") and not text.endswith("\n\n"), f"{sample.name}: ci.yml ending"
+    assert all(line.strip() for line in lines[:-1]), f"{sample.name}: blank lines in ci.yml"
+
+
+def assert_suite_leaves_git_alone(scratch, sample, python, tests_dir):
+    """A pre-commit or pre-push hook runs the suite with GIT_DIR exported: it must not touch that repository."""
+    target = scratch / f"git-target-{sample.name}"
+    target.mkdir()
+    call("git", "init", "-q", "-b", "main", cwd=target)
+    (target / "file.txt").write_text("x\n")
+    call("git", "add", "file.txt", cwd=target)
+    git_commit(target, "target")
+
+    def state():
+        refs = subprocess.check_output(
+            ["git", "for-each-ref", "--format=%(refname) %(objectname)"], cwd=target, text=True
+        )
+        git_dir = target / ".git"
+        return (git_dir / "config").read_bytes(), refs, (git_dir / "HEAD").read_text()
+
+    before = state()
+    env = dict(os.environ, GIT_DIR=str(target / ".git"), GIT_INDEX_FILE=str(target / ".git/index"))
+    call(python, "-m", "pytest", "-q", "-p", "no:cacheprovider", tests_dir, cwd=sample, env=env)
+    assert state() == before, f"{sample.name}: the test suite changed the repository GIT_DIR points at"
+
+
 def verify_swift_existing(scratch, venv):
     """Existing-code mode: format only changed files, SwiftLint against a portable baseline."""
     sample = scratch / "swiftpm-existing"
@@ -66,6 +95,7 @@ def verify_swift_existing(scratch, venv):
     ):
         assert (sample / relative).exists(), relative
     assert "fetch-depth: 0" in (sample / ".github/workflows/ci.yml").read_text()
+    assert_ci_has_no_blank_lines(sample)
     legacy = sample / "Sources/tiny_swift/Legacy.swift"
     legacy.write_text(
         "import Foundation\n\npublic func legacy() -> Data {\n  try! JSONEncoder().encode([1])\n}\n"
@@ -109,6 +139,7 @@ def verify_swift_existing(scratch, venv):
     git_commit(sample, "direct")
     assert fails(quality, "format", cwd=sample), "A direct commit on main skipped the format check"
     call(str(venv / "bin/python"), "-m", "pytest", "-q", "harness_tests", cwd=sample)
+    assert_suite_leaves_git_alone(scratch, sample, str(venv / "bin/python"), "harness_tests")
     clt = Path("/Library/Developer/CommandLineTools")
     if clt.is_dir():
         call(quality, "lint", cwd=clone, env=dict(os.environ, DEVELOPER_DIR=str(clt)))
@@ -128,6 +159,8 @@ def verify_swift(scratch, python_sample):
         "scripts/agent.sh",
         "scripts/agent_session.py",
         "scripts/agent-hooks/post-edit.sh",
+        "scripts/agent-hooks/pre-bash.sh",
+        "scripts/bash_guard.py",
         "scripts/codex_stop.py",
         "scripts/run_units.py",
         "scripts/ratchet.sh",
@@ -152,6 +185,8 @@ def verify_swift(scratch, python_sample):
     call("git", "add", "--", *paths, cwd=sample)
     call("./scripts/check.sh", cwd=sample)
     call(python, "-m", "pytest", "-q", "harness_tests", cwd=sample)
+    assert_suite_leaves_git_alone(scratch, sample, python, "harness_tests")
+    assert_ci_has_no_blank_lines(sample)
     env = dict(os.environ, ALLOW_LABEL_EDIT="1", PRE_COMMIT_HOME=str(scratch / "swift-pre-commit"))
     for stage in ("pre-commit", "pre-push"):
         call(
@@ -285,6 +320,8 @@ def main():
         )
         call("git", "add", "--", *paths, cwd=sample)
         call("./scripts/check.sh", cwd=sample)
+        assert_suite_leaves_git_alone(scratch, sample, python, "tests")
+        assert_ci_has_no_blank_lines(sample)
         probe = sample / "src/tiny_sample/__init__.py"
         original = probe.read_text()
         try:

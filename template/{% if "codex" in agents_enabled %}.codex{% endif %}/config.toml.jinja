@@ -3,3 +3,10 @@
 [[hooks.Stop.hooks]]
 type = "command"
 command = "bash \"$(git rev-parse --show-toplevel)/scripts/agent-hooks/codex-stop.sh\""
+
+# Block chained git commit/push/switch that wouldn't stop on a failed step (scripts/bash_guard.py).
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "bash \"$(git rev-parse --show-toplevel)/scripts/agent-hooks/pre-bash.sh\""
